@@ -92,12 +92,14 @@ What does *not* persist cleanly:
 If you find yourself installing packages manually in a running container, move them into Docker build args so they survive redeploys.
 
 Supported Docker build args in this template:
-- `RUNTIME_APT_PACKAGES` — space-separated apt packages (example: `"ffmpeg jq"`)
+- `RUNTIME_APT_PACKAGES` — space-separated apt packages.
+  - **Default baked set:** `git curl jq ffmpeg sqlite3 ripgrep`
+  - Override in Railway build vars if you want a different set.
 - `RUNTIME_NPM_GLOBAL_PACKAGES` — space-separated npm global packages (example: `"acpx"`)
 
 Example (Railway build variables / Docker args):
 - `OPENCLAW_GIT_REF=v2026.3.23-2`
-- `RUNTIME_APT_PACKAGES=ffmpeg jq`
+- `RUNTIME_APT_PACKAGES=git curl jq ffmpeg sqlite3 ripgrep`
 - `RUNTIME_NPM_GLOBAL_PACKAGES=acpx`
 
 ### Optional bootstrap hook
