@@ -93,13 +93,13 @@ If you find yourself installing packages manually in a running container, move t
 
 Supported Docker build args in this template:
 - `RUNTIME_APT_PACKAGES` — space-separated apt packages.
-  - **Default baked set:** `git curl jq ffmpeg sqlite3 ripgrep`
+  - **Default baked set:** `git curl jq ffmpeg sqlite3 ripgrep tmux gh`
   - Override in Railway build vars if you want a different set.
 - `RUNTIME_NPM_GLOBAL_PACKAGES` — space-separated npm global packages (example: `"acpx"`)
 
 Example (Railway build variables / Docker args):
 - `OPENCLAW_GIT_REF=v2026.3.23-2`
-- `RUNTIME_APT_PACKAGES=git curl jq ffmpeg sqlite3 ripgrep`
+- `RUNTIME_APT_PACKAGES=git curl jq ffmpeg sqlite3 ripgrep tmux gh`
 - `RUNTIME_NPM_GLOBAL_PACKAGES=acpx`
 
 ### Optional bootstrap hook

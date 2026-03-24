@@ -55,7 +55,7 @@ RUN apt-get update \
 # Example (Railway build args):
 #   RUNTIME_APT_PACKAGES="ffmpeg jq"
 #   RUNTIME_NPM_GLOBAL_PACKAGES="acpx"
-ARG RUNTIME_APT_PACKAGES="git curl jq ffmpeg sqlite3 ripgrep"
+ARG RUNTIME_APT_PACKAGES="git curl jq ffmpeg sqlite3 ripgrep tmux gh"
 RUN if [ -n "${RUNTIME_APT_PACKAGES}" ]; then \
       apt-get update \
       && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ${RUNTIME_APT_PACKAGES} \
