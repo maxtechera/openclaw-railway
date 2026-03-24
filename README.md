@@ -95,12 +95,14 @@ Supported Docker build args in this template:
 - `RUNTIME_APT_PACKAGES` — space-separated apt packages.
   - **Default baked set:** `git curl jq ffmpeg sqlite3 ripgrep`
   - Override in Railway build vars if you want a different set.
-- `RUNTIME_NPM_GLOBAL_PACKAGES` — space-separated npm global packages (example: `"acpx"`)
+- `RUNTIME_NPM_GLOBAL_PACKAGES` — space-separated npm global packages.
+  - **Default baked set:** `acpx clawhub`
+  - Override in Railway build vars if you want a different set.
 
 Example (Railway build variables / Docker args):
 - `OPENCLAW_GIT_REF=v2026.3.23-2`
 - `RUNTIME_APT_PACKAGES=git curl jq ffmpeg sqlite3 ripgrep`
-- `RUNTIME_NPM_GLOBAL_PACKAGES=acpx`
+- `RUNTIME_NPM_GLOBAL_PACKAGES=acpx clawhub`
 
 ### Optional bootstrap hook
 
