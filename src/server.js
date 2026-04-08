@@ -988,6 +988,7 @@ const ALLOWED_CONSOLE_COMMANDS = new Set([
   "gateway.restart",
   "gateway.stop",
   "gateway.start",
+  "bootstrap.run",
 
   // OpenClaw CLI helpers
   "openclaw.version",
@@ -1031,6 +1032,12 @@ app.post("/setup/api/console/run", requireSetupAuth, async (req, res) => {
     if (cmd === "gateway.start") {
       const r = await ensureGatewayRunning();
       return res.json({ ok: Boolean(r.ok), output: r.ok ? "Gateway started.\n" : `Gateway not started: ${r.reason}\n` });
+    }
+    if (cmd === "bootstrap.run") {
+      const bp = path.join(WORKSPACE_DIR, "bootstrap.sh");
+      if (!fs.existsSync(bp)) return res.json({ ok: false, output: "No bootstrap.sh found.\n" });
+      const r = await runCmd("bash", [bp], { env: { ...process.env, OPENCLAW_STATE_DIR: STATE_DIR, OPENCLAW_WORKSPACE_DIR: WORKSPACE_DIR }, timeoutMs: 5 * 60 * 1000 });
+      return res.status(r.code === 0 ? 200 : 500).json({ ok: r.code === 0, output: redactSecrets(r.output) });
     }
 
     if (cmd === "openclaw.version") {
