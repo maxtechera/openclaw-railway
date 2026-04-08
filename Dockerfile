@@ -53,6 +53,7 @@ RUN apt-get update \
     pipx \
   && rm -rf /var/lib/apt/lists/*
 
+# Cache-bust: 2026-04-08 session-prune bootstrap
 # Optional: bake runtime-installed dependencies into the image so they survive redeploys.
 # Example (Railway build args):
 #   RUNTIME_APT_PACKAGES="ffmpeg jq"
