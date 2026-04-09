@@ -319,6 +319,40 @@ app.use(express.json({ limit: "1mb" }));
 // Minimal health endpoint for Railway.
 app.get("/setup/healthz", (_req, res) => res.json({ ok: true }));
 
+// Memory diagnostics endpoint.
+app.get("/setup/api/memory", requireSetupAuth, async (_req, res) => {
+  const wrapper = process.memoryUsage();
+  let gateway = null;
+  if (gatewayProc?.pid) {
+    try {
+      const rss = fs.readFileSync(`/proc/${gatewayProc.pid}/status`, "utf8");
+      const vmRSS = rss.match(/VmRSS:\s+(\d+)\s+kB/);
+      const vmSize = rss.match(/VmSize:\s+(\d+)\s+kB/);
+      const vmData = rss.match(/VmData:\s+(\d+)\s+kB/);
+      gateway = {
+        pid: gatewayProc.pid,
+        rssKB: vmRSS ? Number(vmRSS[1]) : null,
+        vsizeKB: vmSize ? Number(vmSize[1]) : null,
+        dataKB: vmData ? Number(vmData[1]) : null,
+        rssMB: vmRSS ? Math.round(Number(vmRSS[1]) / 1024) : null,
+      };
+    } catch {}
+  }
+  // Session store sizes
+  const stores = {};
+  const agentsDir = path.join(STATE_DIR, "agents");
+  try {
+    for (const agent of fs.readdirSync(agentsDir)) {
+      const sf = path.join(agentsDir, agent, "sessions", "sessions.json");
+      if (fs.existsSync(sf)) {
+        const stat = fs.statSync(sf);
+        stores[agent] = { bytes: stat.size, mb: Math.round(stat.size / 1024 / 1024 * 10) / 10 };
+      }
+    }
+  } catch {}
+  res.json({ ok: true, wrapper: { rssMB: Math.round(wrapper.rss / 1024 / 1024), heapUsedMB: Math.round(wrapper.heapUsed / 1024 / 1024), heapTotalMB: Math.round(wrapper.heapTotal / 1024 / 1024) }, gateway, stores });
+});
+
 async function probeGateway() {
   // Don't assume HTTP — the gateway primarily speaks WebSocket.
   // A simple TCP connect check is enough for "is it up".
