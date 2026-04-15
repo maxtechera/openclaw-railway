@@ -1524,6 +1524,21 @@ const server = app.listen(PORT, "0.0.0.0", async () => {
       console.error(`[wrapper] gateway failed to start at boot: ${String(err)}`);
     }
   }
+
+  // Scheduled sessions cleanup every 4 hours to prevent sessions.json bloat.
+  // sessions.json grows unbounded and can reach 40–50 MB with thousands of stale
+  // entries, causing 20–30 s write-lock latency on sessions.preview calls.
+  const SESSIONS_CLEANUP_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
+  setInterval(async () => {
+    if (!isConfigured()) return;
+    console.log("[wrapper] running scheduled sessions cleanup...");
+    try {
+      const r = await runCmd(OPENCLAW_NODE, clawArgs(["sessions", "cleanup"]), { timeoutMs: 60_000 });
+      console.log(`[wrapper] sessions cleanup exit=${r.code}: ${(r.output || "").trim().slice(0, 200)}`);
+    } catch (err) {
+      console.warn(`[wrapper] sessions cleanup failed: ${String(err)}`);
+    }
+  }, SESSIONS_CLEANUP_INTERVAL_MS).unref?.();
 });
 
 server.on("upgrade", async (req, socket, head) => {
