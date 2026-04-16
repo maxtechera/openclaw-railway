@@ -78,7 +78,7 @@ RUN apt-get update \
 # Example (Railway build args):
 #   RUNTIME_APT_PACKAGES="ffmpeg jq"
 #   RUNTIME_NPM_GLOBAL_PACKAGES="acpx"
-ARG RUNTIME_APT_PACKAGES="git curl wget jq ffmpeg sqlite3 ripgrep tmux gh chromium imagemagick poppler-utils tesseract-ocr"
+ARG RUNTIME_APT_PACKAGES="git curl wget jq ffmpeg sqlite3 ripgrep tmux gh chromium imagemagick poppler-utils tesseract-ocr xz-utils"
 RUN if [ -n "${RUNTIME_APT_PACKAGES}" ]; then \
       apt-get update \
       && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ${RUNTIME_APT_PACKAGES} \
@@ -103,6 +103,12 @@ ARG GOGCLI_VERSION=0.12.0
 RUN curl -fsSL "https://github.com/steipete/gogcli/releases/download/v${GOGCLI_VERSION}/gogcli_${GOGCLI_VERSION}_linux_amd64.tar.gz" \
     | tar -xz -C /usr/local/bin gog \
     && chmod +x /usr/local/bin/gog
+
+# Install schpet/linear-cli (Linear issue tracker CLI — replaces python tools/linear.py)
+ARG LINEAR_CLI_VERSION=1.11.1
+RUN curl -fsSL "https://github.com/schpet/linear-cli/releases/download/v${LINEAR_CLI_VERSION}/linear-x86_64-unknown-linux-gnu.tar.xz" \
+    | tar -xJ --strip-components=1 -C /usr/local/bin linear-x86_64-unknown-linux-gnu/linear \
+    && chmod +x /usr/local/bin/linear
 
 # Persist user-installed tools by default by targeting the Railway volume.
 # - npm global installs -> /data/npm
@@ -129,6 +135,7 @@ RUN printf '%s\n' '#!/usr/bin/env bash' 'exec node /openclaw/dist/entry.js "$@"'
   && chmod +x /usr/local/bin/openclaw
 
 COPY src ./src
+COPY scripts ./scripts
 
 # The wrapper listens on $PORT.
 # IMPORTANT: Do not set a default PORT here.
@@ -138,4 +145,5 @@ EXPOSE 8080
 
 # Ensure PID 1 reaps zombies and forwards signals.
 ENTRYPOINT ["tini", "--"]
-CMD ["node", "src/server.js"]
+# Bootstrap CLI credentials (linear, etc.) from env vars before starting server.
+CMD ["sh", "-c", "sh /app/scripts/bootstrap-cli-credentials.sh; exec node src/server.js"]
