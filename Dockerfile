@@ -88,7 +88,7 @@ RUN if [ -n "${RUNTIME_APT_PACKAGES}" ]; then \
 # `openclaw update` expects pnpm. Provide it in the runtime image.
 RUN corepack enable && corepack prepare pnpm@10.23.0 --activate
 
-ARG RUNTIME_NPM_GLOBAL_PACKAGES=""
+ARG RUNTIME_NPM_GLOBAL_PACKAGES="acpx clawhub"
 RUN if [ -n "${RUNTIME_NPM_GLOBAL_PACKAGES}" ]; then \
       npm install -g --omit=dev ${RUNTIME_NPM_GLOBAL_PACKAGES} \
       && npm cache clean --force; \
