@@ -15,3 +15,9 @@ requiredMountPath = "/data"
 # can cause domain routing mismatches.
 OPENCLAW_STATE_DIR = "/data/.openclaw"
 OPENCLAW_WORKSPACE_DIR = "/data/workspace"
+
+# Concurrency intent: ship engine + orchestrator pilots target ~10 in-flight tickets.
+# NOTE: As of this commit, neither openclaw core nor the orchestrator skill consumes
+# MAX_IN_FLIGHT — this var is INTENT-ONLY and documents the desired ceiling. When
+# upstream wires it up (or we add it to the orchestrator), this value takes effect.
+MAX_IN_FLIGHT = "10"
