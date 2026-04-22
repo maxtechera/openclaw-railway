@@ -1539,6 +1539,64 @@ const server = app.listen(PORT, "0.0.0.0", async () => {
       console.warn(`[wrapper] sessions cleanup failed: ${String(err)}`);
     }
   }, SESSIONS_CLEANUP_INTERVAL_MS).unref?.();
+
+  // Scheduled stuck-session monitor every 5 minutes.
+  // Audit found 40+ sessions stuck in "processing" state for 3h, throttling throughput.
+  // openclaw CLI does NOT expose a `sessions kill` / abort subcommand, and the gateway WS
+  // API has no documented per-session abort either. So this is LOG-ONLY for now: we surface
+  // stuck sessions to logs so operators can correlate and triage. When upstream openclaw
+  // ships a kill mechanism, swap the log line for an actual kill call here.
+  // TODO(openclaw): wire up real kill once `openclaw sessions kill <id>` (or equivalent
+  // gateway endpoint) lands upstream — see https://github.com/openclaw/openclaw
+  const STUCK_SESSION_CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+  const STUCK_SESSION_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+  setInterval(async () => {
+    if (!isConfigured()) return;
+    try {
+      const r = await runCmd(
+        OPENCLAW_NODE,
+        clawArgs(["sessions", "--all-agents", "--json"]),
+        { timeoutMs: 30_000 },
+      );
+      if (r.code !== 0) {
+        console.warn(`[wrapper] stuck-session scan: sessions list exit=${r.code}`);
+        return;
+      }
+      let parsed;
+      try {
+        parsed = JSON.parse(r.output);
+      } catch {
+        // openclaw sessions --json may emit a trailing line; try to recover the JSON object.
+        const m = r.output.match(/\{[\s\S]*\}\s*$/);
+        if (!m) return;
+        try { parsed = JSON.parse(m[0]); } catch { return; }
+      }
+      const sessions = Array.isArray(parsed?.sessions) ? parsed.sessions : [];
+      const now = Date.now();
+      let stuckCount = 0;
+      for (const s of sessions) {
+        const updatedAt = Number(s?.updatedAt);
+        if (!Number.isFinite(updatedAt) || updatedAt <= 0) continue;
+        const idleMs = now - updatedAt;
+        if (idleMs < STUCK_SESSION_THRESHOLD_MS) continue;
+        // Only flag sessions that look like in-flight processing — i.e., ones with a key
+        // and not obviously idle stores. Without a status field we surface all stale
+        // entries above the threshold; operators can dedupe.
+        const status = s?.status ?? s?.state ?? "unknown";
+        if (status !== "unknown" && status !== "processing" && status !== "active") continue;
+        const id = s?.key || s?.id || "<unknown>";
+        const idleMin = Math.round(idleMs / 60_000);
+        // LOG-ONLY: openclaw lacks a kill API. Switch to `sessions kill <id>` once available.
+        console.log(`[wrapper] stuck session ${id}, idle for ${idleMin}m (log-only; no kill API)`);
+        stuckCount += 1;
+      }
+      if (stuckCount > 0) {
+        console.log(`[wrapper] stuck-session scan: ${stuckCount} session(s) idle > 30m`);
+      }
+    } catch (err) {
+      console.warn(`[wrapper] stuck-session scan failed: ${String(err)}`);
+    }
+  }, STUCK_SESSION_CHECK_INTERVAL_MS).unref?.();
 });
 
 server.on("upgrade", async (req, socket, head) => {
