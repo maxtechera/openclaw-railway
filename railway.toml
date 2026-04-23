@@ -15,3 +15,16 @@ requiredMountPath = "/data"
 # can cause domain routing mismatches.
 OPENCLAW_STATE_DIR = "/data/.openclaw"
 OPENCLAW_WORKSPACE_DIR = "/data/workspace"
+
+# Tailscale — set TS_AUTHKEY in the Railway dashboard (reusable + ephemeral key
+# from https://login.tailscale.com/admin/settings/keys). Without it the container
+# skips tailnet bootstrap and the Discord voice bot falls back to local whisper.cpp.
+TS_HOSTNAME = "openclaw-railway"
+
+# Discord voice transcription (primary: Wyoming on tailnet home lab)
+WYOMING_HOST = "100.119.224.128"
+WYOMING_PORT = "10300"
+WHISPER_CPP_URL = "http://127.0.0.1:8723/inference"
+DISCORD_VOICE_ROOT = "/data/workspace/voice"
+DISCORD_VOICE_CHUNK_SEC = "10"
+DISCORD_VOICE_LANGUAGE = "auto"
