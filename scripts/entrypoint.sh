@@ -70,6 +70,17 @@ if [ -f /app/scripts/bootstrap-cli-credentials.sh ]; then
   sh /app/scripts/bootstrap-cli-credentials.sh || log "WARN: credential bootstrap exited non-zero"
 fi
 
+# ─── 3b. Derive openclaw hook URL for the Discord voice bot ───────────────────
+# openclaw exposes hooks on the same $PORT as the gateway, under hooks.path
+# (default `/hooks`). The voice bot lives in the same container on localhost,
+# so we point it at 127.0.0.1 and export the token via OPENCLAW_HOOK_TOKEN.
+# See: https://docs.openclaw.ai/automation/cron-jobs#webhooks
+export OPENCLAW_HOOK_URL="${OPENCLAW_HOOK_URL:-http://127.0.0.1:${PORT:-8080}/hooks/wake}"
+if [ -z "${OPENCLAW_HOOK_TOKEN:-}" ] && [ -n "${OPENCLAW_HOOKS_TOKEN:-}" ]; then
+  # Accept either env-var spelling; expose the one discord_voice.py reads.
+  export OPENCLAW_HOOK_TOKEN="${OPENCLAW_HOOKS_TOKEN}"
+fi
+
 # ─── 4. Start the Node server as PID 2 ─────────────────────────────────────────
 log "exec node src/server.js"
 exec node src/server.js

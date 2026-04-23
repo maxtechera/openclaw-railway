@@ -885,6 +885,13 @@ app.post("/setup/api/run", requireSetupAuth, async (req, res) => {
           dm: {
             policy: "pairing",
           },
+          // Disable openclaw's native Discord voice (enabled by default since v2026.4.x)
+          // to avoid fighting our py-cord voice recording bot for the same
+          // voice channel connection — same token, only one connection wins.
+          // Our recording pipeline lives in openclaw-config/tools/discord_voice.py.
+          voice: {
+            enabled: false,
+          },
         };
         const set = await runCmd(
           OPENCLAW_NODE,
