@@ -1540,61 +1540,80 @@ const server = app.listen(PORT, "0.0.0.0", async () => {
     }
   }, SESSIONS_CLEANUP_INTERVAL_MS).unref?.();
 
-  // Scheduled stuck-session monitor every 5 minutes.
-  // Audit found 40+ sessions stuck in "processing" state for 3h, throttling throughput.
-  // openclaw CLI does NOT expose a `sessions kill` / abort subcommand, and the gateway WS
-  // API has no documented per-session abort either. So this is LOG-ONLY for now: we surface
-  // stuck sessions to logs so operators can correlate and triage. When upstream openclaw
-  // ships a kill mechanism, swap the log line for an actual kill call here.
-  // TODO(openclaw): wire up real kill once `openclaw sessions kill <id>` (or equivalent
-  // gateway endpoint) lands upstream — see https://github.com/openclaw/openclaw
+  // Scheduled stuck-worker monitor every 5 minutes.
+  //
+  // Background: openclaw 2026.3.31 unified subagent / ACP / detached CLI runs into a
+  // SQLite-backed task ledger at $OPENCLAW_STATE_DIR/tasks/runs.sqlite (table task_runs).
+  // The previous version of this monitor polled `openclaw sessions --all-agents --json`,
+  // which only sees the legacy session map (main + cron sessions). It produced almost
+  // entirely false positives: cron sessions whose status field was never exposed via the
+  // CLI got flagged "stuck" even though the cron run had completed cleanly.
+  //
+  // task_runs is the canonical surface for in-flight subagent work. We query it directly
+  // via the sqlite3 CLI (already on the image; no new node deps). status='running' with
+  // last_event_at older than the threshold is the real "stuck worker" signal.
+  //
+  // openclaw still has no kill API for these runs, so this remains LOG-ONLY.
+  // TODO(openclaw): wire up real abort once `openclaw tasks cancel <id>` semantics or a
+  // gateway endpoint lands upstream — see https://github.com/openclaw/openclaw
   const STUCK_SESSION_CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
   const STUCK_SESSION_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+
+  function resolveTaskRunsDb() {
+    return path.join(STATE_DIR, "tasks", "runs.sqlite");
+  }
+
   setInterval(async () => {
     if (!isConfigured()) return;
+    const db = resolveTaskRunsDb();
+    if (!fs.existsSync(db)) return; // older openclaw or fresh state — nothing to scan yet
     try {
+      // -separator '\x1f' = unit separator; -newline '\x1e' = record separator.
+      // Defends against label/error fields containing pipes or commas.
+      const sql = [
+        "SELECT",
+        "  task_id,",
+        "  COALESCE(label, '-'),",
+        "  COALESCE(runtime, '-'),",
+        "  COALESCE(child_session_key, '-'),",
+        "  COALESCE(started_at, 0),",
+        "  COALESCE(last_event_at, started_at, 0)",
+        "FROM task_runs",
+        "WHERE status = 'running'",
+        `  AND (CAST(strftime('%s','now') AS INTEGER) * 1000 - COALESCE(last_event_at, started_at, 0)) >= ${STUCK_SESSION_THRESHOLD_MS}`,
+        "ORDER BY COALESCE(last_event_at, started_at) ASC;",
+      ].join(" ");
       const r = await runCmd(
-        OPENCLAW_NODE,
-        clawArgs(["sessions", "--all-agents", "--json"]),
+        "sqlite3",
+        ["-readonly", "-separator", "\x1f", "-newline", "\x1e", db, sql],
         { timeoutMs: 30_000 },
       );
       if (r.code !== 0) {
-        console.warn(`[wrapper] stuck-session scan: sessions list exit=${r.code}`);
+        console.warn(`[wrapper] stuck-worker scan: sqlite3 exit=${r.code} ${r.output?.slice(0, 200) ?? ""}`);
         return;
       }
-      let parsed;
-      try {
-        parsed = JSON.parse(r.output);
-      } catch {
-        // openclaw sessions --json may emit a trailing line; try to recover the JSON object.
-        const m = r.output.match(/\{[\s\S]*\}\s*$/);
-        if (!m) return;
-        try { parsed = JSON.parse(m[0]); } catch { return; }
-      }
-      const sessions = Array.isArray(parsed?.sessions) ? parsed.sessions : [];
+      const records = (r.output || "").split("\x1e").map((s) => s.trim()).filter(Boolean);
       const now = Date.now();
       let stuckCount = 0;
-      for (const s of sessions) {
-        const updatedAt = Number(s?.updatedAt);
-        if (!Number.isFinite(updatedAt) || updatedAt <= 0) continue;
-        const idleMs = now - updatedAt;
-        if (idleMs < STUCK_SESSION_THRESHOLD_MS) continue;
-        // Only flag sessions that look like in-flight processing — i.e., ones with a key
-        // and not obviously idle stores. Without a status field we surface all stale
-        // entries above the threshold; operators can dedupe.
-        const status = s?.status ?? s?.state ?? "unknown";
-        if (status !== "unknown" && status !== "processing" && status !== "active") continue;
-        const id = s?.key || s?.id || "<unknown>";
+      for (const record of records) {
+        const fields = record.split("\x1f");
+        if (fields.length < 6) continue;
+        const [taskId, label, runtime, childKey, startedAtStr, lastEventStr] = fields;
+        const lastEventAt = Number(lastEventStr) || Number(startedAtStr) || 0;
+        if (lastEventAt <= 0) continue;
+        const idleMs = now - lastEventAt;
         const idleMin = Math.round(idleMs / 60_000);
-        // LOG-ONLY: openclaw lacks a kill API. Switch to `sessions kill <id>` once available.
-        console.log(`[wrapper] stuck session ${id}, idle for ${idleMin}m (log-only; no kill API)`);
+        const child = childKey && childKey !== "-" ? childKey : taskId;
+        console.log(
+          `[wrapper] stuck worker runtime=${runtime} label=${label} child=${child} idle=${idleMin}m (log-only; no kill API)`,
+        );
         stuckCount += 1;
       }
       if (stuckCount > 0) {
-        console.log(`[wrapper] stuck-session scan: ${stuckCount} session(s) idle > 30m`);
+        console.log(`[wrapper] stuck-worker scan: ${stuckCount} task_runs.status=running idle > 30m`);
       }
     } catch (err) {
-      console.warn(`[wrapper] stuck-session scan failed: ${String(err)}`);
+      console.warn(`[wrapper] stuck-worker scan failed: ${String(err)}`);
     }
   }, STUCK_SESSION_CHECK_INTERVAL_MS).unref?.();
 });
