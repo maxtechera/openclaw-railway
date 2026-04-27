@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # Build openclaw from source to avoid npm packaging gaps (some dist files are not shipped).
 FROM node:22-bookworm AS openclaw-build
 
@@ -41,21 +42,25 @@ RUN pnpm ui:install && pnpm ui:build
 # Patch: remove the hardcoded "complex interpreter invocation" exec preflight block
 # so agents can use shell pipelines and ANSI-C quoting (e.g. || fallbacks, $'...' args).
 # The check has no config bypass; this is the only way to allow it in a trusted deployment.
-# NOTE: uses find+python inline to avoid Docker layer caching masking the patch.
-RUN find /openclaw/dist/ -name '*.js' -exec grep -l 'complex interpreter invocation detected' {} \; \
-  | xargs -I FILE python3 -c "
+# NOTE: uses find+python heredoc to avoid Docker layer caching masking the patch.
+RUN <<'BASH'
+set -eux
+find /openclaw/dist/ -name '*.js' -exec grep -l 'complex interpreter invocation detected' {} \; | while IFS= read -r f; do
+  python3 - "$f" <<'PY'
 import re, sys
 path = sys.argv[1]
 content = open(path).read()
 patched = re.sub(
-  r'if \(hasInterpreterInvocation && hasComplexSyntax && \([^)]+\)\) throw new Error\(\"exec preflight: complex interpreter invocation detected[^\"]*\"\);',
+  r'if \(hasInterpreterInvocation && hasComplexSyntax && \([^)]+\)\) throw new Error\("exec preflight: complex interpreter invocation detected[^"]*"\);',
   '/* exec preflight: complex interpreter invocation check removed for trusted deployment */',
   content
 )
 assert patched != content, 'pattern not found — check regex'
 open(path, 'w').write(patched)
 print('patched', path)
-" FILE
+PY
+done
+BASH
 
 
 # Runtime image

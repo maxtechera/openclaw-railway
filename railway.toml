@@ -28,3 +28,8 @@ WHISPER_CPP_URL = "http://127.0.0.1:8723/inference"
 DISCORD_VOICE_ROOT = "/data/workspace/voice"
 DISCORD_VOICE_CHUNK_SEC = "10"
 DISCORD_VOICE_LANGUAGE = "auto"
+# Concurrency intent: ship engine + orchestrator pilots target ~10 in-flight tickets.
+# NOTE: As of this commit, neither openclaw core nor the orchestrator skill consumes
+# MAX_IN_FLIGHT — this var is INTENT-ONLY and documents the desired ceiling. When
+# upstream wires it up (or we add it to the orchestrator), this value takes effect.
+MAX_IN_FLIGHT = "10"
