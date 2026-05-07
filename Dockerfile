@@ -23,7 +23,7 @@ WORKDIR /openclaw
 
 # Pin to a known-good ref (tag/branch). Override in Railway template settings if needed.
 # Using a released tag avoids build breakage when `main` temporarily references unpublished packages.
-ARG OPENCLAW_GIT_REF=v2026.4.21
+ARG OPENCLAW_GIT_REF=v2026.5.6
 RUN git clone --depth 1 --branch "${OPENCLAW_GIT_REF}" https://github.com/openclaw/openclaw.git .
 
 # Patch: relax version requirements for packages that may reference unpublished versions.
@@ -145,7 +145,8 @@ RUN git clone --depth 1 --branch "${WHISPER_CPP_REF}" https://github.com/ggergan
 RUN pip3 install --no-cache-dir --break-system-packages \
     "py-cord[voice]==2.6.1" \
     "PyNaCl>=1.5.0" \
-    "aiohttp>=3.9.0"
+    "aiohttp>=3.9.0" \
+    "pdfminer.six"
 
 # Persist user-installed tools by default by targeting the Railway volume.
 # - npm global installs -> /data/npm
